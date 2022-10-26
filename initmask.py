@@ -7,7 +7,7 @@ The mask is zero on land and one at sea.
 The mask overwrites any previous land mask on the file,
 so work on a copy of the grid file.
 
-The script may use a couple of minutes, 
+The script may use a couple of minutes,
 depending on the size of the grid.
 
 Use editmask to manually fine adjust the mask to the coast.
@@ -31,7 +31,7 @@ from netCDF4 import Dataset
 # Work on a copy of the grid file
 grid_file = "norkyst_800m_grid_copy.nc"
 # Name of mask variable, X and Y dimensions
-mask_var = "mask_rho"   # ROMS
+mask_var = "mask_rho"  # ROMS
 X_dim = "xi_rho"
 Y_dim = "eta_rho"
 

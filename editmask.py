@@ -1,10 +1,23 @@
-# -*- coding: utf-8 -*-
+"""Interactive editor for adapting a land mask to a coast line.
 
-import shutil
+Input is a netcdf grid file with a land mask and
+a nan-separated text file with a coast line in the
+grid coordinate system.
+Warns about critical grid cells.
+The land mask is modified in place (work on a copy).
+
+Idea from editmask.m in matlab.tar.gz, available from the
+ROMS site, https://www.myroms.org/index.php?page=Processing.
+
+"""
+# ------------------------------
+# Bjørn Ådlandsvik <bjorn@hi.no>
+# Institute of Marine Research
+# 2022-10-25
+# ------------------------------
+
+
 import numpy as np
-
-# import matplotlib
-# matplotlib.use('Qt4Agg')
 import matplotlib.pyplot as plt
 from netCDF4 import Dataset
 
@@ -12,13 +25,19 @@ from netCDF4 import Dataset
 # User settings
 # ---------------
 
+# Grid file copy
 grid_file = "norkyst_800m_grid_copy.nc"
+# Variable name for the mask, = 0 at land, = 1 at sea
+mask_var = "mask_rho"  # ROMS
 
+# Text file with coast line in grid coordinates
+# Polygons are separated by Nan
 coast_file = "coast.dat"
 
-# Hele området, for oversikt
-i0, i1 = 0, 2602
-j0, j1 = 0, 902
+# Sub-domain to consider
+# Use None for whole axis
+i0, i1 = 0, None
+j0, j1 = 0, None
 
 
 # -------------
@@ -74,7 +93,7 @@ def foreground():
 
 
 def savemask():
-    f.variables["mask_rho"][j0:j1, i0:i1] = M
+    f.variables[mask_var][j0:j1, i0:i1] = M
     f.sync()
 
 
@@ -97,15 +116,14 @@ def display_mask(M):
     MSW = B0[:-2, :-2]
 
     # Q = 0 if no pair of neighbour grid cells are both at sea
-    # Q2 = 0 if grid cell not in 2x2 sea block
+    # Q2 = 0 if grid cell is not in 2x2 sea block
     Q = MS * MW + MW * MN + MN * ME + ME * MS
     Q2 = MSW * MS * MW + MNW * MN * MW + MNE * MN * ME + MSE * MS * ME
 
     # M2 = 0,1 on land, 2, 3 at sea
     # Both with checkboard pattern
     M2 = 2 * M + A
-    # Set semi-critical sea sells (Q != 0, Q2==0) to 4 (pink)
-    # cond = (M > 0) & (Q > 0) & (Q2 == 0)
+    # Set semi-critical sea sells (Q != 0, Q2==0) to 4 (orange)
     M2[(M > 0) & (Q > 0) & (Q2 == 0)] = 4
     # Set critical sea cells (Q==0) to 5 (i.e. red)
     M2[(M > 0) & (Q == 0)] = 5
@@ -117,70 +135,64 @@ def display_mask(M):
 # File handling
 # ---------------
 
-# Work on a copy of the grid file
-# shutil.copy(grid_file, grid_file_copy)
-
 f = Dataset(grid_file, mode="a")
-
-M = f.variables["mask_rho"][j0:j1, i0:i1]
-
-
-# X and Y coordinates of grid cell corners
+M = f.variables[mask_var][j0:j1, i0:i1]
 jmax, imax = M.shape
+
+# Fill in missing right or upper limit
+if i1 is None:
+    i1 = i0 + imax
+if j1 is None:
+    j1 = j0 + jmax
+
+# Grid coordinates of cell boundaries
 X = -0.5 + i0 + np.arange(imax + 1)
 Y = -0.5 + j0 + np.arange(jmax + 1)
 
-
-# Read grid info
-# execfile(map_file)
-
+# Read coast line
 Xc, Yc = np.loadtxt(coast_file, unpack=True)
-
 
 # Check-board pattern of 0 and 1
 A = np.fromfunction(lambda i, j: (i + j) % 2, (jmax, imax))
 
 M2 = display_mask(M)
-# if M2.max() < 4.0:
-# print "editmask: no critical sea cells"
-print("editmask: # critical sea cells = ", np.sum(M2 == 4.0))
+print("editmask: # critical cells = ", np.sum(M2 == 5))
+print("editmask: # semi-critical cells = ", np.sum(M2 == 4))
 
 # Uncomment to list the critical locations
-print(np.argwhere(M2 >= 4.0))
+# print(np.argwhere(M2 >= 5.0))
 
-
-# Colormaps for land and sea
+# Make a dedicated colour map
 mycolormap = plt.matplotlib.colors.ListedColormap(
     [
-        (0.4, 1, 0.4),  # light green
-        (0.8, 1, 0.2),  # yellow
-        (0.2, 0.2, 1),  # blue
-        (0.4, 0.4, 1),  # light blue
-        (1, 0.5, 0.0),  # orange
-        (1, 0, 0),  # clear red
+        (0.4, 1.0, 0.4),  # light green
+        (0.8, 1.0, 0.2),  # yellow
+        (0.2, 0.2, 1.0),  # blue
+        (0.4, 0.4, 1.0),  # light blue
+        (1.0, 0.5, 0.0),  # orange
+        (1.0, 0.0, 0.0),  # clear red
     ]
-) 
+)
 
 
 # -------------
 # Plot
 # -------------
 
-# The one below should work, but gives sometimes
-# lines that should not be there.
-# Break up the plot function to avoid this
-plt.plot(Xc, Yc, color='black', lw=2)
+# Plot coast line
+plt.plot(Xc, Yc, color="black", lw=2)
+
+# The line above have sometimes given annoying extra lines.
+# If this happens, break up the coast line in separate polygons by:
 # (I,) = np.nonzero(np.isnan(Xc))
 # I = np.concatenate(([0], I))
 # for i, j in zip(I[:-1], I[1:]):
 #     plt.plot(Xc[i:j], Yc[i:j], color="black", lw=2)
 
-
 # Land mask
 h = plt.pcolormesh(X, Y, M2, cmap=mycolormap)
 plt.clim(-0.5, 5.5)
 # plt.colorbar()
-
 
 plt.title("m: Save mask,  o: Toggle zoom,  p: Pan,  q: Quit")
 plt.axis("image")
@@ -191,6 +203,5 @@ plt.connect("button_press_event", click)
 plt.connect("key_press_event", key)
 
 plt.show()
-
 
 f.close()

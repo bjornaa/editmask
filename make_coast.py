@@ -1,5 +1,5 @@
 """Make a coast line from GSHHS in grid coordinates
-   
+
 Uses pyproj, shapely and cartopy
 
 """
@@ -45,12 +45,10 @@ latmax = lat.max() + eps
 
 # Grid projection
 proj4string = f"+proj=stere +ellps={ellps} +lat_0=90.0 +lat_ts=60.0 +x_0={xp*dx} +y_0={yp*dx} +lon_0={ylon}"
-# gproj = pyproj.Proj(proj4string)
-grid_projection = pyproj.Proj(
-    proj="stere", ellps=ellps, lat_0=90, lat_ts=60, x_0=xp * dx, y_0=yp * dx, lon_0=ylon
-)
+grid_projection = pyproj.Proj(proj4string)
 
-# Global coastline from GSHHS as shapely collection generator
+# Global coastline in lon-lat from GSHHS
+# as shapely collection generator
 path = shapereader.gshhs(scale=GSHHS_resolution)
 coast_ll = shapereader.Reader(path).geometries()
 
